@@ -1,15 +1,18 @@
 #!/usr/bin/env Rscript
 
-#' Genomic Data Plot Generation for Copy Number Variation
+#' Genomic Data Plot Generation
 #' 
-#' This script analyzes and visualizes genomic copy number variation data, 
-#' particularly focusing on segmentation statistics from RDS files. 
-#' It creates gene plots with customizable parameters.
+#' This script analyzes and visualizes genomic data, particularly focusing on 
+#' segmentation statistics from RDS files. It creates gene plots with customizable
+#' parameters.
 #' 
 #' @param seg_file Path to the segmentation RDS file
 #' @param cov_file Path to the coverage RDS file
 #' @param gene_of_interest Gene name to visualize (e.g., "SMARCB1")
-#' @return A PDF plot visualizing the gene CNV data
+#' @return An SVG plot visualizing the gene data
+#' 
+#' @author Converted from Jupyter notebook code
+#' @date April 24, 2025
 
 # Load required libraries
 suppressPackageStartupMessages({
@@ -25,16 +28,17 @@ suppressPackageStartupMessages({
   library(khtools)
   library(signal)
   library(parallel)
-  library(skitools)
 })
 
-# Import external functions if needed
-import::from("~/scripts/r_sources/jupyter_plot.R", show_svg, cache_plot)
-
-# Set Jupyter plot width globally
-options("jupyter.plot.width" = 20)
-
 #' Color mapping function for numeric values
+#' 
+#' @param x Numeric vector to color
+#' @param colors Color palette to use
+#' @param alpha Alpha transparency (0-1)
+#' @param capvals Boolean whether to cap values
+#' @param maxVal Maximum value for capping
+#' @param minVal Minimum value for capping
+#' @return Vector of color codes
 numeric2color <- function(x, colors, alpha, capvals = TRUE, maxVal = 8, minVal = 0) {
   maxx = max(x, na.rm = TRUE)
   minx = min(x, na.rm = TRUE)
@@ -64,8 +68,19 @@ numeric2color <- function(x, colors, alpha, capvals = TRUE, maxVal = 8, minVal =
   return(outCols)
 }
 
-#' Main function to generate genomic copy number variation plot
-plot_gene_cnv <- function(
+#' Main function to generate genomic plot
+#' 
+#' @param seg_file Path to segmentation RDS file
+#' @param cov_file Path to coverage RDS file
+#' @param gene_of_interest Gene to visualize (character string)
+#' @param output_width Plot width (default: 18)
+#' @param output_file Output file path (default: NULL for display)
+#' @param cytoband_file Path to cytoband file (default path provided)
+#' @param gencode_file Path to gencode annotation file (default path provided)
+#' @param gencode_cache_dir Directory for gencode cache (default path provided)
+#' @param pdf_filename Optional PDF filename to save plot (default: NULL)
+#' @return Plot object (if output_file is NULL) or saves to file
+plot_gene_coverage <- function(
   seg_file,
   cov_file,
   gene_of_interest,
@@ -74,15 +89,13 @@ plot_gene_cnv <- function(
   cytoband_file = "/gpfs/data/imielinskilab/DB/UCSC/hg38.cytoband.txt",
   gencode_file = "~/DB/GENCODE/hg38/v29/gencode.v29.annotation.gff3",
   gencode_cache_dir = "~/DB/GENCODE/hg38/v29/",
-  filename = NULL
+  pdf_filename = NULL
 ) {
+  # Suppress all warnings
+  options(warn = -1)
   # Read input files
   seg = readRDS(seg_file)
   cov = readRDS(cov_file)
-  
-  # Disable all warnings globally during execution
-  oldw <- getOption("warn")
-  options(warn = -1)
   
   # Set sequence style
   GenomeInfoDb::seqlevelsStyle(seg) = "NCBI"
@@ -103,7 +116,11 @@ plot_gene_cnv <- function(
   cyto$arm = gsub("[0-9.]+", "", cyto$band)
   
   # Find overlaps between coverage and cytoband
+  # Just use the original code exactly as provided
   armval = gr.findoverlaps(cov %Q% (!is.na(foreground)), cyto, qcol = names(mcols(cov)), scol = "arm")
+  
+  # Recalculate segmentation statistics
+  gr_segstats = JaBbA:::segstats(target = seg, signal = cov, field = "foreground")
   
   # Process arm values
   armvalSplit = armval %>% split(paste(seqnames(.), .$arm, sep = "__"))
@@ -196,34 +213,34 @@ plot_gene_cnv <- function(
   gr_segstats_smooth = gr_segstats_smooth[width(gr_segstats_smooth) < 10000]
   
   # Create the plot
-  GENES = gene_of_interest
+  GENES = gene_of_interest # e.g., "SMARCB1"
   
-  if (!is.null(filename)) {
+  if (!is.null(pdf_filename)) {
     # Use skitools::ppdf for PDF output
     skitools::ppdf(
-      {
-        par(oma = c(0, 0, 0, 0), mai = c(0, 2, 1, 3))
-        plot(
-          c(
-            gt_gc %>% {x = .; x@data[[1]] = x@data[[1]][GENES]; x},
-            gt_signal,
-            gt_segs
-          ),
-          win = (genes %Q% (gene_name %in% GENES) %>% khtools::gr.noval()) + 1e6,
-          legend.params = list(plot = FALSE),
-          y.quantile = 0.95,
-          xaxis.suffix = "Mb",
-          xaxis.unit = 1e6,
-          xaxis.round = 1,
-          xaxis.width = FALSE,
-          ylab.las = 1,
-          ylab.adj = 0
-        )
-      },
-      filename = filename,
+      filename = pdf_filename,
       width = output_width
     )
-    message(paste("PDF saved to:", filename))
+    
+    par(oma = c(0, 0, 0, 0), mai = c(0, 2, 1, 3))
+    plot(
+      c(
+        gt_gc %>% {x = .; x@data[[1]] = x@data[[1]][GENES]; x},
+        gt_signal,
+        gt_segs
+      ),
+      win = (genes %Q% (gene_name %in% GENES) %>% khtools::gr.noval()) + 1e6,
+      legend.params = list(plot = FALSE),
+      y.quantile = 0.95,
+      xaxis.suffix = "Mb",
+      xaxis.unit = 1e6,
+      xaxis.round = 1,
+      xaxis.width = FALSE,
+      ylab.las = 1,
+      ylab.adj = 0
+    )
+    dev.off()
+    message(paste("PDF saved to:", pdf_filename))
   } else if (!is.null(output_file)) {
     svg(output_file, width = output_width, height = output_width * 0.6)
     
@@ -248,34 +265,47 @@ plot_gene_cnv <- function(
     dev.off()
     message(paste("SVG saved to:", output_file))
   } else {
-    par(oma = c(0, 0, 0, 0), mai = c(0, 2, 1, 3))
-    plot(
-      c(
-        gt_gc %>% {x = .; x@data[[1]] = x@data[[1]][GENES]; x},
-        gt_signal,
-        gt_segs
-      ),
-      win = (genes %Q% (gene_name %in% GENES) %>% khtools::gr.noval()) + 1e6,
-      legend.params = list(plot = FALSE),
-      y.quantile = 0.95,
-      xaxis.suffix = "Mb",
-      xaxis.unit = 1e6,
-      xaxis.round = 1,
-      xaxis.width = FALSE,
-      ylab.las = 1,
-      ylab.adj = 0
-    )
+    show_svg_plot <- function() {
+      par(oma = c(0, 0, 0, 0), mai = c(0, 2, 1, 3))
+      plot(
+        c(
+          gt_gc %>% {x = .; x@data[[1]] = x@data[[1]][GENES]; x},
+          gt_signal,
+          gt_segs
+        ),
+        win = (genes %Q% (gene_name %in% GENES) %>% khtools::gr.noval()) + 1e6,
+        legend.params = list(plot = FALSE),
+        y.quantile = 0.95,
+        xaxis.suffix = "Mb",
+        xaxis.unit = 1e6,
+        xaxis.round = 1,
+        xaxis.width = FALSE,
+        ylab.las = 1,
+        ylab.adj = 0
+      )
+    }
+    
+    show_svg_plot()
   }
   
   # Restore warning level
-  options(warn = oldw)
+  options(warn = 0)
 }
 
-# We're importing show_svg and cache_plot from external file
-# import::from("~/scripts/r_sources/jupyter_plot.R", show_svg, cache_plot)
-# So we don't redefine them here
+#' Function to display SVG plot in different contexts
+#' 
+#' @param ... Arguments passed to plot_gene_coverage function
+#' @return SVG plot object
+show_svg <- function(...) {
+  plot_gene_coverage(...)
+}
 
 #' Cache mechanism for plots
+#' 
+#' @param file Path to cache file
+#' @param FUN Function to execute if cache doesn't exist
+#' @param ... Arguments passed to FUN
+#' @return Result of FUN or cached result
 cache_plot <- function(file, FUN, ...) {
   if (file.exists(file)) {
     message(paste("Loading cached plot from:", file))
@@ -287,11 +317,37 @@ cache_plot <- function(file, FUN, ...) {
   }
 }
 
+# Add a function to check package availability and install if needed
+check_and_install_packages <- function() {
+  required_packages <- c(
+    "JaBbA", "Flow", "gUtils", "gTrack", "RKernel", "dplyr", 
+    "data.table", "rtracklayer", "GenomeInfoDb", "khtools", 
+    "signal", "parallel"
+  )
+  
+  missing_packages <- required_packages[!sapply(required_packages, requireNamespace, quietly = TRUE)]
+  
+  if (length(missing_packages) > 0) {
+    message("Installing missing packages: ", paste(missing_packages, collapse = ", "))
+    
+    # First try Bioconductor for bioinformatics packages
+    if (!requireNamespace("BiocManager", quietly = TRUE)) {
+      install.packages("BiocManager")
+    }
+    
+    for (pkg in missing_packages) {
+      tryCatch({
+        BiocManager::install(pkg, update = FALSE, ask = FALSE)
+      }, error = function(e) {
+        message("Failed to install via BiocManager, trying CRAN: ", pkg)
+        install.packages(pkg)
+      })
+    }
+  }
+}
+
 # If script is run directly (not sourced), execute example
 if (sys.nframe() == 0) {
-  # Suppress all warnings for the script execution
-  options(warn = -1)
-  
   # Example usage when script is run directly
   args <- commandArgs(trailingOnly = TRUE)
   
@@ -301,7 +357,7 @@ if (sys.nframe() == 0) {
     gene <- args[3]
     
     output_file <- NULL
-    png_filename <- NULL
+    pdf_filename <- NULL
     
     if (length(args) >= 4) {
       if (grepl("\\.pdf$", args[4], ignore.case = TRUE)) {
@@ -311,54 +367,16 @@ if (sys.nframe() == 0) {
       }
     }
     
-    # Run without showing warnings
-    plot_gene_cnv(seg_file, cov_file, gene, output_file = output_file, pdf_filename = pdf_filename)
-    
+    suppressWarnings(
+      tryCatch({
+        plot_gene_coverage(seg_file, cov_file, gene, output_file = output_file, pdf_filename = pdf_filename)
+      }, error = function(e) {
+        cat("Error in plot_gene_coverage: ", e$message, "\n")
+      })
+    )
   } else {
     cat("Usage: Rscript genomic_plot.R <seg_file.rds> <cov_file.rds> <gene_name> [output_file.svg|pdf]\n")
     cat("Example: Rscript genomic_plot.R seg.rds cov.rds SMARCB1 output.svg\n")
     cat("Example: Rscript genomic_plot.R seg.rds cov.rds SMARCB1 output.pdf\n")
   }
-  
-  # Restore warnings
-  options(warn = 0)
 }
-
-# Example usage with your specific format:
-# options("jupyter.plot.width" = 20)
-# skitools::ppdf(
-#     {
-#     par(oma = c(0, 0, 0, 0), mai = c(0, 2, 1, 3))
-#     plot(
-#         c(
-#             gt_gc
-#             %>% {x = .; x@data[[1]] = x@data[[1]][GENES]; x}
-#             , 
-#             gt_signal
-#             ,
-#             gt_segs
-#         )
-#         ,
-#         win = (genes %Q% (gene_name %in% GENES) %>% khtools::gr.noval())
-#         + 1e6
-#         ,
-#         legend.params = list(plot = FALSE)
-#         ,
-#         y.quantile = 0.95
-#         , xaxis.suffix = "Mb"
-#         , xaxis.unit = 1e6
-#         , xaxis.round = 1
-#         , xaxis.width = FALSE
-#         , ylab.las = 1
-#         , ylab.adj = 0
-#     ) }
-#     , filename = "TAPS_april/CSF-25-52_SMARCB1.pdf"
-#     , width = 18)
-#
-# Usage with your script:
-# source("~/Projects/TAPS/functions/plots.R")
-# plot_gene_cnv(
-#   "/gpfs/data/imielinskilab/projects/TAPS/wmg-nyu-matija/Flow/CBS_ZC_taps/NGS-23-2549/seg.rds",
-#   "/gpfs/data/imielinskilab/projects/TAPS/wmg-nyu-matija/Flow/CBS_ZC_taps/NGS-23-2549/cov.rds",
-#   c("PLCG2","PKD1L2")
-# )

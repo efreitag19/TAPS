@@ -9,7 +9,7 @@
 #' @param seg_file Path to the segmentation RDS file
 #' @param cov_file Path to the coverage RDS file
 #' @param gene_of_interest Gene name to visualize (e.g., "SMARCB1")
-#' @return A PDF plot visualizing the gene CNV data
+#' @return An SVG or PDF plot visualizing the gene CNV data
 
 # Load required libraries
 suppressPackageStartupMessages({
@@ -28,11 +28,7 @@ suppressPackageStartupMessages({
   library(skitools)
 })
 
-# Import external functions if needed
 import::from("~/scripts/r_sources/jupyter_plot.R", show_svg, cache_plot)
-
-# Set Jupyter plot width globally
-options("jupyter.plot.width" = 20)
 
 #' Color mapping function for numeric values
 numeric2color <- function(x, colors, alpha, capvals = TRUE, maxVal = 8, minVal = 0) {
@@ -74,7 +70,7 @@ plot_gene_cnv <- function(
   cytoband_file = "/gpfs/data/imielinskilab/DB/UCSC/hg38.cytoband.txt",
   gencode_file = "~/DB/GENCODE/hg38/v29/gencode.v29.annotation.gff3",
   gencode_cache_dir = "~/DB/GENCODE/hg38/v29/",
-  filename = NULL
+  pdf_filename = NULL
 ) {
   # Read input files
   seg = readRDS(seg_file)
@@ -198,32 +194,32 @@ plot_gene_cnv <- function(
   # Create the plot
   GENES = gene_of_interest
   
-  if (!is.null(filename)) {
+  if (!is.null(pdf_filename)) {
     # Use skitools::ppdf for PDF output
     skitools::ppdf(
-      {
-        par(oma = c(0, 0, 0, 0), mai = c(0, 2, 1, 3))
-        plot(
-          c(
-            gt_gc %>% {x = .; x@data[[1]] = x@data[[1]][GENES]; x},
-            gt_signal,
-            gt_segs
-          ),
-          win = (genes %Q% (gene_name %in% GENES) %>% khtools::gr.noval()) + 1e6,
-          legend.params = list(plot = FALSE),
-          y.quantile = 0.95,
-          xaxis.suffix = "Mb",
-          xaxis.unit = 1e6,
-          xaxis.round = 1,
-          xaxis.width = FALSE,
-          ylab.las = 1,
-          ylab.adj = 0
-        )
-      },
-      filename = filename,
+      filename = pdf_filename,
       width = output_width
     )
-    message(paste("PDF saved to:", filename))
+    
+    par(oma = c(0, 0, 0, 0), mai = c(0, 2, 1, 3))
+    plot(
+      c(
+        gt_gc %>% {x = .; x@data[[1]] = x@data[[1]][GENES]; x},
+        gt_signal,
+        gt_segs
+      ),
+      win = (genes %Q% (gene_name %in% GENES) %>% khtools::gr.noval()) + 1e6,
+      legend.params = list(plot = FALSE),
+      y.quantile = 0.95,
+      xaxis.suffix = "Mb",
+      xaxis.unit = 1e6,
+      xaxis.round = 1,
+      xaxis.width = FALSE,
+      ylab.las = 1,
+      ylab.adj = 0
+    )
+    dev.off()
+    message(paste("PDF saved to:", pdf_filename))
   } else if (!is.null(output_file)) {
     svg(output_file, width = output_width, height = output_width * 0.6)
     
@@ -271,9 +267,10 @@ plot_gene_cnv <- function(
   options(warn = oldw)
 }
 
-# We're importing show_svg and cache_plot from external file
-# import::from("~/scripts/r_sources/jupyter_plot.R", show_svg, cache_plot)
-# So we don't redefine them here
+#' Function to display SVG plot in different contexts
+show_svg <- function(...) {
+  plot_gene_cnv(...)
+}
 
 #' Cache mechanism for plots
 cache_plot <- function(file, FUN, ...) {
@@ -301,7 +298,7 @@ if (sys.nframe() == 0) {
     gene <- args[3]
     
     output_file <- NULL
-    png_filename <- NULL
+    pdf_filename <- NULL
     
     if (length(args) >= 4) {
       if (grepl("\\.pdf$", args[4], ignore.case = TRUE)) {
@@ -323,42 +320,3 @@ if (sys.nframe() == 0) {
   # Restore warnings
   options(warn = 0)
 }
-
-# Example usage with your specific format:
-# options("jupyter.plot.width" = 20)
-# skitools::ppdf(
-#     {
-#     par(oma = c(0, 0, 0, 0), mai = c(0, 2, 1, 3))
-#     plot(
-#         c(
-#             gt_gc
-#             %>% {x = .; x@data[[1]] = x@data[[1]][GENES]; x}
-#             , 
-#             gt_signal
-#             ,
-#             gt_segs
-#         )
-#         ,
-#         win = (genes %Q% (gene_name %in% GENES) %>% khtools::gr.noval())
-#         + 1e6
-#         ,
-#         legend.params = list(plot = FALSE)
-#         ,
-#         y.quantile = 0.95
-#         , xaxis.suffix = "Mb"
-#         , xaxis.unit = 1e6
-#         , xaxis.round = 1
-#         , xaxis.width = FALSE
-#         , ylab.las = 1
-#         , ylab.adj = 0
-#     ) }
-#     , filename = "TAPS_april/CSF-25-52_SMARCB1.pdf"
-#     , width = 18)
-#
-# Usage with your script:
-# source("~/Projects/TAPS/functions/plots.R")
-# plot_gene_cnv(
-#   "/gpfs/data/imielinskilab/projects/TAPS/wmg-nyu-matija/Flow/CBS_ZC_taps/NGS-23-2549/seg.rds",
-#   "/gpfs/data/imielinskilab/projects/TAPS/wmg-nyu-matija/Flow/CBS_ZC_taps/NGS-23-2549/cov.rds",
-#   c("PLCG2","PKD1L2")
-# )
