@@ -1,26 +1,89 @@
-# TAPS
+# TAPS Workflow
 
-TAPS workflow xx Eloise
+> **TAPS** (TET-assisted pyridine borane sequencing) workflow by Eloise
 
-## processing using next flow
-follow instructions in "/gpfs/data/imielinskilab/projects/TAPS/wmg-nyu-matija/TAPS_new.ipynb" after receiving link to fastq's, takes you through the following steps
-1. Nextflow
-    - parabricks: bams
-    - coverage: fragcounter, dryclean
-    - sv_calling: gridss
-2. Deduping bams (incl. merging if necessary)
-3. Picard : "~/tasks/tumor_only/hg38/PicardBamQC.task"
-4. CBS : "~/tasks/CBS_ZC.task"
-5. Rastair : "~/tasks/Rastair_GRCh38.task"
+## Processing using Nextflow
 
-## analyses to do per each new batch
-6. ichorCNA : "/gpfs/data/imielinskilab/git/mskilab/flows/tasks/ichorCNA.task"
-7. Classifier : "/gpfs/data/imielinskilab/Git/flows/tasks/Classifier_EF.task"
-8. SNV : "/gpfs/home/freite01/lab/Git/flows/tasks/SNV_taps.task"
-9. cool amplifications : source("~/Projects/TAPS/functions/plots.R") -> plot_gene_cnv
-10. complex events : "/gpfs/home/freite01/lab/Git/flows/tasks/JaBbA_taps.task" -> "/gpfs/home/freite01/lab/Git/flows/tasks/Events_taps.task"
+Follow instructions in `/gpfs/data/imielinskilab/projects/TAPS/wmg-nyu-matija/TAPS_new.ipynb` after receiving link to fastq's, which takes you through the following steps:
 
-## optional summarizing things
-11. PCA / umap : "gpfs/data/imielinskilab/projects/TAPS/wmg-nyu-matija/pca.ipynb"
-12. methylation unsupervised clustering : "gpfs/data/imielinskilab/projects/TAPS/wmg-nyu-matija/methylation_heatmap.ipynb"
-13. oncoprint : "gpfs/data/imielinskilab/projects/TAPS/wmg-nyu-matija/oncoprint.ipynb"
+1. **Nextflow**  
+   Results give you:
+   - `/parabricks`: bams
+   - `/coverage`: fragcounter, dryclean
+   - `/sv_calling`: gridss
+
+2. **Dedup bams** (including merging if necessary)
+
+3. **Picard**  
+   ```
+   ~/tasks/tumor_only/hg38/PicardBamQC.task
+   ```
+
+4. **CBS**  
+   ```
+   ~/tasks/CBS_ZC.task
+   ```
+
+5. **Rastair**  
+   ```
+   ~/tasks/Rastair_GRCh38.task
+   ```
+
+## Analyses to do per each new batch
+
+6. **ichorCNA**  
+   ```
+   /gpfs/data/imielinskilab/git/mskilab/flows/tasks/ichorCNA.task
+   ```
+
+7. **Classifier**  
+   ```
+   /gpfs/data/imielinskilab/Git/flows/tasks/Classifier_EF.task
+   ```
+
+8. **SNV**  
+   ```
+   /gpfs/home/freite01/lab/Git/flows/tasks/SNV_taps.task
+   ```
+   followed by
+   ```
+   /gpfs/data/imielinskilab/Git/flows/tasks/SnpEff_taps.task
+   ```
+   parsesnpeff
+   ```
+   
+## Other downstream analyses
+
+These, and a few others, are in `/gpfs/data/imielinskilab/projects/TAPS/wmg-nyu-matija/EF_downstream_analyses.ipynb`
+
+9. **CNVs**  
+   ```R
+   source("~/Projects/TAPS/functions/plots.R") -> plot_gene_cnv
+   ```
+10. **Fusions**
+
+11. **Complex events**  
+    ```
+    /gpfs/home/freite01/lab/Git/flows/tasks/JaBbA_taps.task
+    ```
+    followed by
+    ```
+    /gpfs/home/freite01/lab/Git/flows/tasks/Events_taps.task
+    ```
+
+## Cohort-wide summaries
+
+12. **PCA / UMAP**  
+    ```
+    /gpfs/data/imielinskilab/projects/TAPS/wmg-nyu-matija/pca.ipynb
+    ```
+
+13. **Methylation unsupervised clustering**  
+    ```
+    /gpfs/data/imielinskilab/projects/TAPS/wmg-nyu-matija/methylation_heatmap.ipynb
+    ```
+
+14. **Oncoprint**  
+    ```
+    /gpfs/data/imielinskilab/projects/TAPS/wmg-nyu-matija/oncoprint.ipynb
+    ```
