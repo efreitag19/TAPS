@@ -49,6 +49,7 @@ Follow instructions in `/gpfs/data/imielinskilab/projects/TAPS/wmg-nyu-matija/TA
    ```
    /gpfs/data/imielinskilab/Git/flows/tasks/SnpEff_taps.task
    ```
+   followed by
    parsesnpeff & other filtering
    
 ## Other downstream analyses
