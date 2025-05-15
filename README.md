@@ -42,7 +42,7 @@ Update paths in pairs table
    /gpfs/data/imielinskilab/Git/flows/tasks/Classifier_EF.task
    ```
 
-8. **SNV**  
+8. **SNV** - following along in `gpfs/data/imielinskilab/projects/TAPS/wmg-nyu-matija/SNV.ipynb` 
    ```
    /gpfs/home/freite01/lab/Git/flows/tasks/SNV_taps.task
    ```
