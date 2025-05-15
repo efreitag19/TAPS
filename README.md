@@ -6,32 +6,33 @@
 
 Follow instructions in `/gpfs/data/imielinskilab/projects/TAPS/wmg-nyu-matija/TAPS_new.ipynb` after receiving link to fastq's, which takes you through the following steps:
 
-1. **Nextflow**  
-   Results give you:
+1. **Nextflow** - Results give you:
    - `/parabricks`: bams
    - `/coverage`: fragcounter, dryclean
    - `/sv_calling`: gridss
+Update paths in pairs table
 
 2. **Dedup bams** (including merging if necessary)
 
-3. **Picard**  
+3. **Picard** - get wgs_metrics for number of reads, coverage ->
+      update smb://research-cifs.nyumc.org/Research/snudem01lab/snudem01labspace/$PROJECTS/CSF cfDNA/TAPS LIB PREPS_RESEARCH/ND Summary Data.xlsx
    ```
    ~/tasks/tumor_only/hg38/PicardBamQC.task
    ```
-
-4. **CBS**  
+   
+4. **CBS** - get seg.rds and cov.rds for plotting CNVs
    ```
    ~/tasks/CBS_ZC.task
    ```
 
-5. **Rastair**  
+5. **Rastair** - TAPS-specific methylation caller to get rastair_output.mods which serves as methylation beta matrix
    ```
    ~/tasks/Rastair_GRCh38.task
    ```
 
 ## Analyses to do per each new batch
 
-6. **ichorCNA**  
+6. **ichorCNA** - generate genomeWide.pdfs from bam, and put plots into smb://research-cifs.nyumc.org/Research/snudem01lab/snudem01labspace/$PROJECTS/CSF cfDNA/TAPS_cnv
    ```
    /gpfs/data/imielinskilab/git/mskilab/flows/tasks/ichorCNA.task
    ```
