@@ -44,7 +44,7 @@ Update paths in pairs table
 
 8. **SNV** - following along in `/gpfs/data/imielinskilab/projects/TAPS/wmg-nyu-matija/SNV.ipynb` 
    ```
-   source("~/Projects/TAPS/functions/plots.R") -> ngs_to_bed() to get bed files from PACT data
+   source("~/Projects/TAPS/functions/snv.R") -> ngs_to_bed() to get bed files from PACT data
    ```
    /gpfs/home/freite01/lab/Git/flows/tasks/SNV_taps.task
    ```
@@ -76,17 +76,17 @@ These, and a few others, are in `/gpfs/data/imielinskilab/projects/TAPS/wmg-nyu-
 
 ## Cohort-wide summaries
 
-12. **PCA / UMAP**  
+12. **PCA / UMAP** - create PCA and UMAP plots from rastair outputs, intersected with epic array defined methylation sites 
     ```
     /gpfs/data/imielinskilab/projects/TAPS/wmg-nyu-matija/pca.ipynb
     ```
 
-13. **Methylation unsupervised clustering**  
+13. **Methylation unsupervised clustering**  - create methylation heatmaps with top 5,000 variable sites via unsupervised clustering
     ```
     /gpfs/data/imielinskilab/projects/TAPS/wmg-nyu-matija/methylation_heatmap.ipynb
     ```
 
-14. **Oncoprint**  
+14. **Oncoprint**  - plug output from SNV and metadata and (for now) manual visualization of CNVs from genomeWide ichor plots to create oncoprint summarizing current cohort
     ```
     /gpfs/data/imielinskilab/projects/TAPS/wmg-nyu-matija/oncoprint.ipynb
     ```
