@@ -1,318 +1,315 @@
-# Comprehensive function to construct, find and update paths with enhanced flexibility
-construct_paths <- function(
-  pairs_taps,                  # The data.table to update
-  base_dir,                    # Base directory path
-  pattern,                     # File pattern to search for or append (NO DEFAULT)
-  id_column = "pair",          # Column containing identifiers
-  target_column = NULL,        # Column to update (if NULL, derived from pattern)
-  clean_invalid = TRUE,        # Whether to set invalid paths to NA
-  recursive = FALSE,           # Whether to search directories recursively
-  match_directories = TRUE,    # Whether to match directory names to pair IDs
-  create_if_missing = FALSE,   # Whether to create directories/files if missing
-  preserve_existing = TRUE,    # Whether to preserve existing entries in target column
-  flat_structure = FALSE,      # If TRUE, creates paths like base_dir/pairid_pattern instead of base_dir/pairid/pattern
-  id_in_filename = FALSE       # If TRUE, creates paths like base_dir/id/id.pattern
-) {
-  # Required packages
-  if (!requireNamespace("data.table", quietly = TRUE)) {
-    stop("Package 'data.table' is required")
-  }
+convert_all_vcfs_to_csv <- function(base_dir, dir_pattern = "^CSF-") {
+  # Load required libraries
+  library(vcfR)
+  library(stringr)
+  library(dplyr)
   
-  # Ensure pairs_taps is a data.table
-  if (!data.table::is.data.table(pairs_taps)) {
-    pairs_taps <- data.table::as.data.table(pairs_taps)
-  }
-  
-  # If target_column is NULL, derive it from pattern
-  if (is.null(target_column)) {
-    # Extract name before extension
-    if (grepl("\\.", pattern)) {
-      target_column <- sub("\\.[^.]+$", "", pattern)
-    } else {
-      target_column <- pattern
-    }
-    message(paste("Using derived target column:", target_column))
-  }
-  
-  # Create target column if it doesn't exist
-  if (!target_column %in% names(pairs_taps)) {
-    pairs_taps[, (target_column) := NA_character_]
-  }
-  
-  # Save existing valid entries if preserve_existing is TRUE
-  existing_entries <- NULL
-  if (preserve_existing) {
-    # Get indices of rows with non-NA values in target column
-    valid_indices <- which(!is.na(pairs_taps[[target_column]]))
-    if (length(valid_indices) > 0) {
-      existing_entries <- data.table(
-        row_index = valid_indices,
-        value = pairs_taps[valid_indices, get(target_column)]
+  # Define our core conversion function
+  convert_single_file <- function(vcf_file, output_csv_file) {
+    tryCatch({
+      # Load the VCF file
+      vcf_obj <- read.vcfR(vcf_file)
+      
+      # Extract sample name from the directory name
+      sample_name <- basename(dirname(vcf_file))
+      
+      # Extract basic variant information
+      variant_data <- data.frame(
+        SAMPLE = sample_name,
+        CHROM = getCHROM(vcf_obj),
+        POS = getPOS(vcf_obj),
+        REF = getREF(vcf_obj),
+        ALT = getALT(vcf_obj),
+        QUAL = getQUAL(vcf_obj),
+        stringsAsFactors = FALSE
       )
-      message(sprintf("Preserving %d existing entries in column '%s'", 
-                    length(valid_indices), target_column))
-    }
-  }
-  
-  # Construct paths for each pair based on parameters
-  paths <- sapply(pairs_taps[[id_column]], function(pair) {
-    if (is.na(pair)) return(NA)
-    
-    if (flat_structure) {
-      # Flat structure: base_dir/pairid_pattern
-      file_path <- file.path(base_dir, paste0(pair, pattern))
-    } else if (id_in_filename) {
-      # ID in both directory and filename: base_dir/id/id.pattern
-      file_path <- file.path(base_dir, pair, paste0(pair, pattern))
-    } else {
-      # Original behavior: base_dir/pairid/pattern
-      file_path <- file.path(base_dir, pair, pattern)
-    }
-    
-    return(file_path)
-  })
-  
-  # Update the target column with constructed paths
-  pairs_taps[, (target_column) := paths]
-  
-  # Clean invalid paths if requested
-  if (clean_invalid) {
-    # Check which paths exist
-    valid <- sapply(pairs_taps[[target_column]], file.exists)
-    # Set invalid paths to NA
-    pairs_taps[!valid, (target_column) := NA]
-  }
-  
-  # If match_directories is TRUE and not using flat_structure, check for existing folders
-  if (match_directories && (!flat_structure || id_in_filename)) {
-    # Get list of existing directories
-    if (!dir.exists(base_dir)) {
-      if (create_if_missing) {
-        dir.create(base_dir, recursive = TRUE, showWarnings = FALSE)
-      } else {
-        warning(paste("Base directory does not exist:", base_dir))
-        return(pairs_taps)
-      }
-    }
-    
-    existing_folders <- list.dirs(base_dir, full.names = FALSE, recursive = FALSE)
-    existing_folders <- existing_folders[existing_folders != ""]
-    
-    # Loop through folders and find matching rows
-    for (folder in existing_folders) {
-      matching_rows <- which(pairs_taps[[id_column]] == folder)
       
-      if (length(matching_rows) > 0) {
-        # Construct path with the folder based on selected format
-        if (id_in_filename) {
-          path <- file.path(base_dir, folder, paste0(folder, pattern))
-        } else {
-          path <- file.path(base_dir, folder, pattern)
+      # Process INFO field to extract gene and variant type
+      info_fields <- vcf_obj@fix[, "INFO"]
+      
+      # Initialize columns for gene information
+      variant_data$GENE <- NA
+      variant_data$AberrationType <- NA
+      variant_data$HGVS_c <- NA
+      variant_data$HGVS_p <- NA
+      variant_data$GT <- NA
+      variant_data$AD <- NA
+      variant_data$DP <- NA
+      
+      # Extract information from INFO field
+      for (i in 1:nrow(variant_data)) {
+        info <- info_fields[i]
+        
+        # Extract Gene name
+        gene_match <- str_match(info, "\\|([^\\|]+)\\|transcript\\|")
+        if (!is.na(gene_match[1,2])) {
+          variant_data$GENE[i] <- gene_match[1,2]
         }
         
-        # Check if file exists
-        if (file.exists(path) || create_if_missing) {
-          pairs_taps[matching_rows, (target_column) := path]
+        # Extract Annotation type (variant type)
+        annot_match <- str_match(info, "ANN=[^\\|]+\\|([^\\|]+)\\|")
+        if (!is.na(annot_match[1,2])) {
+          variant_data$AberrationType[i] <- annot_match[1,2]
         }
-      }
-    }
-  }
-  # For flat_structure, we can optionally check for existing files matching our pattern
-  else if (match_directories && flat_structure) {
-    # Get list of files in the base directory
-    if (!dir.exists(base_dir)) {
-      if (create_if_missing) {
-        dir.create(base_dir, recursive = TRUE, showWarnings = FALSE)
-      } else {
-        warning(paste("Base directory does not exist:", base_dir))
-        return(pairs_taps)
-      }
-    }
-    
-    # List all files in the directory
-    existing_files <- list.files(base_dir, full.names = FALSE)
-    
-    # Check for each pair if a matching file exists
-    for (i in 1:nrow(pairs_taps)) {
-      pair_id <- pairs_taps[[id_column]][i]
-      if (!is.na(pair_id)) {
-        expected_file <- paste0(pair_id, pattern)
-        if (expected_file %in% existing_files) {
-          pairs_taps[i, (target_column) := file.path(base_dir, expected_file)]
-        }
-      }
-    }
-  }
-  
-  # Create files/directories if requested and they don't exist
-  if (create_if_missing) {
-    for (i in 1:nrow(pairs_taps)) {
-      path <- pairs_taps[[target_column]][i]
-      if (!is.na(path) && !file.exists(path)) {
-        # Create directory if it doesn't exist
-        dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
         
-        # Create empty file (touch)
-        file.create(path)
+        # Extract HGVS.c notation
+        hgvs_c_match <- str_match(info, "c\\.([^\\|]+)\\|")
+        if (!is.na(hgvs_c_match[1,1])) {
+          variant_data$HGVS_c[i] <- paste0("c.", hgvs_c_match[1,1])
+        }
+        
+        # Extract HGVS.p notation
+        hgvs_p_match <- str_match(info, "p\\.([^\\|]+)\\|")
+        if (!is.na(hgvs_p_match[1,1])) {
+          variant_data$HGVS_p[i] <- paste0("p.", hgvs_p_match[1,1])
+        }
       }
-    }
+      
+      # Extract FORMAT fields (GT, AD, DP)
+      # First, get the FORMAT string for each variant
+      format_strings <- vcf_obj@gt[, 1]
+      
+      # Process each variant
+      for (i in 1:nrow(variant_data)) {
+        format_fields <- unlist(strsplit(format_strings[i], ":"))
+        sample_data <- unlist(strsplit(vcf_obj@gt[i, 2], ":"))
+        
+        # Match fields with their values
+        for (j in 1:length(format_fields)) {
+          if (j <= length(sample_data)) {
+            field <- format_fields[j]
+            value <- sample_data[j]
+            
+            if (field == "GT") {
+              variant_data$GT[i] <- value
+            } else if (field == "AD") {
+              variant_data$AD[i] <- value
+            } else if (field == "DP") {
+              variant_data$DP[i] <- value
+            }
+          }
+        }
+      }
+      
+      # Create a copy of the data frame to work with
+      processed_data <- variant_data
+      
+      # Safely extract AD_REF and AD_ALT
+      processed_data$AD_REF <- NA
+      processed_data$AD_ALT <- NA
+      
+      # Process AD field safely
+      for (i in 1:nrow(processed_data)) {
+        if (!is.na(processed_data$AD[i])) {
+          ad_values <- unlist(strsplit(processed_data$AD[i], ","))
+          if (length(ad_values) >= 1) {
+            processed_data$AD_REF[i] <- as.numeric(ad_values[1])
+          }
+          if (length(ad_values) >= 2) {
+            processed_data$AD_ALT[i] <- as.numeric(ad_values[2])
+          }
+        }
+      }
+      
+      # Safely convert DP to numeric and calculate VAF
+      processed_data$DP <- as.numeric(processed_data$DP)
+      
+      # Calculate VAF safely
+      processed_data$VAF <- NA
+      for (i in 1:nrow(processed_data)) {
+        if (!is.na(processed_data$AD_REF[i]) && !is.na(processed_data$AD_ALT[i])) {
+          total <- processed_data$AD_REF[i] + processed_data$AD_ALT[i]
+          if (total > 0) {
+            processed_data$VAF[i] <- processed_data$AD_ALT[i] / total
+          }
+        }
+      }
+      
+      # Apply filtering separately without relying on dplyr pipes
+      filtered_data <- processed_data[
+        !is.na(processed_data$GT) & 
+        processed_data$GT %in% c("0/1", "1/1", "1|0", "0|1", "1|1") &
+        !is.na(processed_data$AD_ALT) & 
+        processed_data$AD_ALT >= 5 &
+        !is.na(processed_data$VAF) & 
+        processed_data$VAF >= 0.2 &
+        !is.na(processed_data$DP) & 
+        processed_data$DP >= 10,
+      ]
+      
+      # Only write CSV if there are variants left after filtering
+      if (nrow(filtered_data) > 0) {
+        write.csv(filtered_data, file=output_csv_file, row.names=FALSE, quote=TRUE)
+        cat("Converted:", vcf_file, "→", output_csv_file, "\n")
+        return(TRUE)
+      } else {
+        cat("Skipped (no significant variants):", vcf_file, "\n")
+        return(FALSE)
+      }
+    }, error = function(e) {
+      cat("ERROR processing", vcf_file, ":", conditionMessage(e), "\n")
+      return(FALSE)
+    })
   }
   
-  # Report results
-  valid_count <- sum(!is.na(pairs_taps[[target_column]]))
-  total_count <- nrow(pairs_taps)
-  message(sprintf("Updated %d/%d rows with valid paths in column '%s'", 
-                  valid_count, total_count, target_column))
+  # Find all matching directories based on the provided pattern
+  ngs_dirs <- list.dirs(base_dir, recursive=TRUE)
+  ngs_dirs <- grep(dir_pattern, basename(ngs_dirs), value=TRUE)
+  ngs_dirs <- file.path(base_dir, ngs_dirs)
   
-  # Restore existing entries if preserve_existing is TRUE
-  if (preserve_existing && !is.null(existing_entries) && nrow(existing_entries) > 0) {
-    for (i in 1:nrow(existing_entries)) {
-      row_idx <- existing_entries[i, row_index]
-      value <- existing_entries[i, value]
+  # Find all matching VCF files
+  file_pattern <- "\\.vcf$"
+  vcf_files <- c()
+  for (dir in ngs_dirs) {
+    matching_files <- list.files(
+      dir, 
+      pattern=file_pattern,
+      full.names=TRUE,
+      recursive=FALSE
+    )
+    vcf_files <- c(vcf_files, matching_files)
+  }
+  
+  # Create output directory if it doesn't exist
+  output_dir <- file.path(base_dir, "csv_exports")
+  if (!dir.exists(output_dir)) {
+    dir.create(output_dir, recursive=TRUE)
+  }
+  
+  # Process each file
+  results <- list()
+  cat("Found", length(vcf_files), "files to process\n")
+  
+  for (vcf_file in vcf_files) {
+    sample_name <- basename(dirname(vcf_file))
+    output_file <- file.path(output_dir, paste0(sample_name, "_variants.csv"))
+    
+    success <- convert_single_file(vcf_file, output_file)
+    results[[vcf_file]] <- success
+  }
+  
+  # Combine all CSVs into one master file
+  if (sum(unlist(results)) > 0) {
+    combined_file <- file.path(output_dir, "combined_variants.csv")
+    
+    # Get list of successfully created CSV files
+    csv_files <- list.files(
+      output_dir,
+      pattern="_variants\\.csv$",
+      full.names=TRUE
+    )
+    
+    # Read and combine all CSVs
+    combined_data <- NULL
+    for (csv_file in csv_files) {
+      # Skip the combined file if it already exists
+      if (csv_file == combined_file) next
       
-      # Only restore if the current value is NA
-      if (is.na(pairs_taps[row_idx, get(target_column)])) {
-        pairs_taps[row_idx, (target_column) := value]
+      data <- read.csv(csv_file)
+      
+      # If this is the first CSV, set combined_data to this data
+      if (is.null(combined_data)) {
+        combined_data <- data
+      } else {
+        # Check if column names match
+        missing_cols <- setdiff(names(combined_data), names(data))
+        if (length(missing_cols) > 0) {
+          # Add missing columns with NA values
+          for (col in missing_cols) {
+            data[[col]] <- NA
+          }
+        }
+        
+        # Check for columns in data that aren't in combined_data
+        extra_cols <- setdiff(names(data), names(combined_data))
+        if (length(extra_cols) > 0) {
+          # Add these columns to combined_data with NA values
+          for (col in extra_cols) {
+            combined_data[[col]] <- NA
+          }
+        }
+        
+        # Now columns should match - combine using rbind
+        combined_data <- rbind(combined_data, data[names(combined_data)])
       }
     }
     
-    # Report how many entries were preserved
-    preserved_count <- sum(!is.na(pairs_taps[existing_entries$row_index, get(target_column)]))
-    message(sprintf("Preserved %d existing entries in column '%s'", 
-                    preserved_count, target_column))
+    # Write combined file
+    if (!is.null(combined_data) && nrow(combined_data) > 0) {
+      write.csv(combined_data, file=combined_file, row.names=FALSE)
+      cat("Created combined variant file:", combined_file, "\n")
+    }
   }
   
-  return(pairs_taps)
+  # Return the path to the combined file or NULL if none was created
+  if (sum(unlist(results)) > 0) {
+    return(file.path(output_dir, "combined_variants.csv"))
+  } else {
+    return(NULL)
+  }
 }
 
-# Comprehensive function to construct, find and update paths in pairs_taps
-construct_paths_old <- function(
-  pairs_taps,                  # The data.table to update
-  base_dir,                    # Base directory path
-  pattern,                     # File pattern to search for or append (NO DEFAULT)
-  id_column = "pair",          # Column containing identifiers
-  target_column = NULL,        # Column to update (if NULL, derived from pattern)
-  clean_invalid = TRUE,        # Whether to set invalid paths to NA
-  recursive = FALSE,           # Whether to search directories recursively
-  match_directories = TRUE,    # Whether to match directory names to pair IDs
-  create_if_missing = FALSE,   # Whether to create directories/files if missing
-  preserve_existing = TRUE     # Whether to preserve existing entries in target column
-) {
-  # Required packages
-  if (!requireNamespace("data.table", quietly = TRUE)) {
-    stop("Package 'data.table' is required")
+combine_all_csvs <- function(csv_dir, pattern = "^CSF", output_file = NULL) {
+  # Generate default output filename based on pattern if not provided
+  if (is.null(output_file)) {
+    output_file <- paste0(gsub("\\^", "", pattern), "_combined_data.csv")
   }
   
-  # Ensure pairs_taps is a data.table
-  if (!data.table::is.data.table(pairs_taps)) {
-    pairs_taps <- data.table::as.data.table(pairs_taps)
+  # Construct the file pattern to match specified prefix and _variants.csv suffix
+  file_pattern <- paste0(pattern, ".*_variants\\.csv$")
+  
+  # List all matching CSV files in the directory
+  csv_files <- list.files(csv_dir, pattern = file_pattern, full.names = TRUE)
+  
+  if (length(csv_files) == 0) {
+    stop(paste0("No CSV files found matching pattern '", file_pattern, "' in the specified directory"))
   }
   
-  # If target_column is NULL, derive it from pattern
-  if (is.null(target_column)) {
-    # Extract name before extension
-    if (grepl("\\.", pattern)) {
-      target_column <- sub("\\.[^.]+$", "", pattern)
-    } else {
-      target_column <- pattern
-    }
-    message(paste("Using derived target column:", target_column))
-  }
+  # Initialize an empty list to store all data frames
+  all_data <- list()
   
-  # Create target column if it doesn't exist
-  if (!target_column %in% names(pairs_taps)) {
-    pairs_taps[, (target_column) := NA_character_]
-  }
-  
-  # Save existing valid entries if preserve_existing is TRUE
-  existing_entries <- NULL
-  if (preserve_existing) {
-    # Get indices of rows with non-NA values in target column
-    valid_indices <- which(!is.na(pairs_taps[[target_column]]))
-    if (length(valid_indices) > 0) {
-      existing_entries <- data.table(
-        row_index = valid_indices,
-        value = pairs_taps[valid_indices, get(target_column)]
-      )
-      message(sprintf("Preserving %d existing entries in column '%s'", 
-                    length(valid_indices), target_column))
-    }
-  }
-  
-  # Construct paths for each pair
-  paths <- sapply(pairs_taps[[id_column]], function(pair) {
-    if (is.na(pair)) return(NA)
-    file_path <- file.path(base_dir, pair, pattern)
-    return(file_path)
-  })
-  
-  # Update the target column with constructed paths
-  pairs_taps[, (target_column) := paths]
-  
-  # Clean invalid paths if requested
-  if (clean_invalid) {
-    # Check which paths exist
-    valid <- sapply(pairs_taps[[target_column]], file.exists)
-    # Set invalid paths to NA
-    pairs_taps[!valid, (target_column) := NA]
-  }
-  
-  # If match_directories is TRUE, check for existing folders and update paths
-  if (match_directories) {
-    # Get list of existing directories
-    if (!dir.exists(base_dir)) {
-      if (create_if_missing) {
-        dir.create(base_dir, recursive = TRUE, showWarnings = FALSE)
-      } else {
-        warning(paste("Base directory does not exist:", base_dir))
-        return(pairs_taps)
-      }
-    }
-    
-    existing_folders <- list.dirs(base_dir, full.names = FALSE, recursive = FALSE)
-    existing_folders <- existing_folders[existing_folders != ""]
-    
-    # Loop through folders and find matching rows
-    for (folder in existing_folders) {
-      matching_rows <- which(pairs_taps[[id_column]] == folder)
+  # Read each CSV and add sample name
+  for (file in csv_files) {
+    tryCatch({
+      # Read the CSV file
+      data <- read.csv(file, stringsAsFactors = FALSE)
       
-      if (length(matching_rows) > 0) {
-        # Construct path with the folder
-        path <- file.path(base_dir, folder, pattern)
-        
-        # Check if file exists
-        if (file.exists(path) || create_if_missing) {
-          pairs_taps[matching_rows, (target_column) := path]
-        }
-      }
-    }
-  }
-  
-  # Report results
-  valid_count <- sum(!is.na(pairs_taps[[target_column]]))
-  total_count <- nrow(pairs_taps)
-  message(sprintf("Updated %d/%d rows with valid paths in column '%s'", 
-                  valid_count, total_count, target_column))
-  
-  # Restore existing entries if preserve_existing is TRUE
-  if (preserve_existing && !is.null(existing_entries) && nrow(existing_entries) > 0) {
-    for (i in 1:nrow(existing_entries)) {
-      row_idx <- existing_entries[i, row_index]
-      value <- existing_entries[i, value]
+      # Extract sample name from filename
+      sample_name <- sub("_variants\\.csv$", "", basename(file))
       
-      # Only restore if the current value is NA
-      if (is.na(pairs_taps[row_idx, get(target_column)])) {
-        pairs_taps[row_idx, (target_column) := value]
+      # Check if a sample_name column already exists
+      if (!"sample_name" %in% names(data)) {
+        # Add sample name column
+        data$sample_name <- sample_name
       }
-    }
-    
-    # Report how many entries were preserved
-    preserved_count <- sum(!is.na(pairs_taps[existing_entries$row_index, get(target_column)]))
-    message(sprintf("Preserved %d existing entries in column '%s'", 
-                    preserved_count, target_column))
+      
+      # Add to the list
+      all_data[[length(all_data) + 1]] <- data
+      
+      cat("Processed:", file, "\n")
+    }, error = function(e) {
+      cat("ERROR processing", file, ":", conditionMessage(e), "\n")
+    })
   }
   
-  return(pairs_taps)
+  # Combine all data frames
+  if (length(all_data) == 0) {
+    stop("No data could be processed from the CSV files")
+  }
+  
+  # Use rbindlist from data.table to handle different columns
+  library(data.table)
+  combined_data <- rbindlist(all_data, fill = TRUE)
+  
+  # Write combined data to a new CSV file
+  output_path <- file.path(csv_dir, output_file)
+  write.csv(combined_data, file = output_path, row.names = FALSE)
+  
+  cat("\nCombined data written to:", output_path, "\n")
+  cat("Total rows:", nrow(combined_data), "\n")
+  cat("Total files combined:", length(all_data), "\n")
+  
+  return(invisible(combined_data))
 }
 
 # Function that creates CSF BED files when possible, NGS files only when needed
