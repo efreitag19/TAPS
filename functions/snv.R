@@ -1,3 +1,183 @@
+convert_all_granges_to_csv <- function(base_dir, dir_pattern = "^CSF-", file_pattern = "annotated_snpeff.rds$") {
+  # Define our core conversion function
+  convert_single_file <- function(rds_file, output_csv_file) {
+    tryCatch({
+      # Load the RDS file
+      gr_obj <- readRDS(rds_file)
+      
+      # First extract the basic GRanges information
+      basic_info <- data.frame(
+        chromosome = as.character(seqnames(gr_obj)),
+        start = start(gr_obj),
+        end = end(gr_obj),
+        strand = as.character(strand(gr_obj))
+      )
+      
+      # Get metadata
+      meta <- mcols(gr_obj)
+      meta_df <- data.frame(row.names=1:length(gr_obj))
+      
+      # Process each column individually with safer conversion
+      for (col_name in names(meta)) {
+        col_data <- meta[[col_name]]
+        
+        # Handle different types of data
+        if (is(col_data, "List") || is.list(col_data)) {
+          # Process lists element by element to avoid coercion issues
+          safe_values <- character(length(col_data))
+          
+          for (i in seq_along(col_data)) {
+            x <- col_data[[i]]
+            if (length(x) == 0 || all(is.na(x))) {
+              safe_values[i] <- "NA"
+            } else {
+              # Try to convert each element to string
+              tryCatch({
+                if (length(x) == 1) {
+                  safe_values[i] <- as.character(x)
+                } else {
+                  safe_values[i] <- paste(as.character(x), collapse=",")
+                }
+              }, error = function(e) {
+                safe_values[i] <- "ERROR_CONVERTING"
+              })
+            }
+          }
+          meta_df[[col_name]] <- safe_values
+        } else {
+          # For regular columns, add directly
+          meta_df[[col_name]] <- col_data
+        }
+      }
+      
+      # Combine data frames
+      result_df <- cbind(basic_info, meta_df)
+      
+      # Add the sample name (derived from the directory name)
+      sample_name <- basename(dirname(rds_file))
+      result_df$sample <- sample_name
+      
+      # Write to CSV
+      write.csv(result_df, file=output_csv_file, row.names=FALSE, quote=TRUE)
+      
+      cat("Converted:", rds_file, "→", output_csv_file, "\n")
+      return(TRUE)
+    }, error = function(e) {
+      cat("ERROR processing", rds_file, ":", conditionMessage(e), "\n")
+      return(FALSE)
+    })
+  }
+  
+  # List all subdirectories matching the pattern
+  ngs_dirs <- list.dirs(base_dir, recursive=TRUE)
+  ngs_dirs <- grep(dir_pattern, basename(ngs_dirs), value=TRUE)
+  ngs_dirs <- file.path(base_dir, ngs_dirs)
+  
+  # Find all matching RDS files
+  rds_files <- c()
+  for (dir in ngs_dirs) {
+    matching_files <- list.files(
+      dir, 
+      pattern=file_pattern,
+      full.names=TRUE,
+      recursive=FALSE
+    )
+    rds_files <- c(rds_files, matching_files)
+  }
+  
+  # Create output directory if it doesn't exist
+  output_dir <- file.path(base_dir, "csv_exports")
+  if (!dir.exists(output_dir)) {
+    dir.create(output_dir, recursive=TRUE)
+  }
+  
+  # Process each file
+  results <- list()
+  cat("Found", length(rds_files), "files to process\n")
+  
+  for (rds_file in rds_files) {
+    sample_name <- basename(dirname(rds_file))
+    output_file <- file.path(output_dir, paste0(sample_name, "_snpeff.csv"))
+    
+    success <- convert_single_file(rds_file, output_file)
+    results[[rds_file]] <- success
+  }
+  
+  # If successful conversions exist, combine them into one file
+  success_files <- names(results)[unlist(results)]
+  if (length(success_files) > 0) {
+    # Extract the prefix from dir_pattern for naming the combined file
+    pattern_prefix <- gsub("\\^", "", dir_pattern)
+    pattern_prefix <- gsub("-.*$", "", pattern_prefix)
+    if (pattern_prefix == "") pattern_prefix <- "combined"
+    
+    # Create combined file path
+    combined_file <- file.path(output_dir, paste0(pattern_prefix, "_combined_snpeff.csv"))
+    
+    # Get all successfully created CSV files
+    csv_files <- list()
+    for (rds_file in success_files) {
+      sample_name <- basename(dirname(rds_file))
+      csv_file <- file.path(output_dir, paste0(sample_name, "_snpeff.csv"))
+      if (file.exists(csv_file)) {
+        csv_files[[length(csv_files) + 1]] <- csv_file
+      }
+    }
+    
+    # Read and combine all CSVs if any exist
+    if (length(csv_files) > 0) {
+      combined_data <- NULL
+      
+      for (csv_file in csv_files) {
+        tryCatch({
+          data <- read.csv(csv_file, stringsAsFactors=FALSE)
+          
+          # If this is the first CSV, set combined_data to this data
+          if (is.null(combined_data)) {
+            combined_data <- data
+          } else {
+            # Check if column names match
+            missing_cols <- setdiff(names(combined_data), names(data))
+            if (length(missing_cols) > 0) {
+              # Add missing columns with NA values
+              for (col in missing_cols) {
+                data[[col]] <- NA
+              }
+            }
+            
+            # Check for columns in data that aren't in combined_data
+            extra_cols <- setdiff(names(data), names(combined_data))
+            if (length(extra_cols) > 0) {
+              # Add these columns to combined_data with NA values
+              for (col in extra_cols) {
+                combined_data[[col]] <- NA
+              }
+            }
+            
+            # Now columns should match - combine using rbind
+            combined_data <- rbind(combined_data, data[names(combined_data)])
+          }
+        }, error = function(e) {
+          cat("Error reading", csv_file, ":", conditionMessage(e), "\n")
+        })
+      }
+      
+      # Write combined file
+      if (!is.null(combined_data) && nrow(combined_data) > 0) {
+        write.csv(combined_data, file=combined_file, row.names=FALSE)
+        cat("Created combined file:", combined_file, "with", nrow(combined_data), "rows\n")
+      }
+    }
+  }
+  
+  # Summary
+  success_count <- sum(unlist(results))
+  cat("\nSummary: Successfully converted", success_count, "of", length(rds_files), "files\n")
+  cat("CSV files saved to:", output_dir, "\n")
+  
+  return(invisible(results))
+}
+
 convert_all_vcfs_to_csv <- function(base_dir, dir_pattern = "^CSF-") {
   # Load required libraries
   library(vcfR)
@@ -313,7 +493,7 @@ combine_all_csvs <- function(csv_dir, pattern = "^CSF", output_file = NULL) {
 }
 
 # Function that creates CSF BED files when possible, NGS files only when needed
-ngs_to_bed <- function(input_file, output_dir = "bed", pairs_taps) {
+ngs_to_bed <- function(input_file, output_dir = "bed", pairs_taps, ngs_col_name = "Test.Number") {
   # Load packages
   library(rtracklayer)
   library(GenomicRanges)
@@ -372,14 +552,18 @@ ngs_to_bed <- function(input_file, output_dir = "bed", pairs_taps) {
   
   # Find NGS ID column
   ngs_col <- NULL
-  for (col in c("Test.Number_datadump", "Test.Number_selected")) {
-    if (col %in% names(variants)) {
-      ngs_col <- col
-      break
+  if (ngs_col_name %in% names(variants)) {
+    ngs_col <- ngs_col_name
+  } else {
+    for (col in c("Test.Number_datadump", "Test.Number_selected")) {
+      if (col %in% names(variants)) {
+        ngs_col <- col
+        break
+      }
     }
   }
   if (is.null(ngs_col)) stop("No Test.Number column found")
-  
+    
   # 5. Clean variant data
   log("Processing variants...")
   variants$CHROM <- as.character(variants$CHROM)
