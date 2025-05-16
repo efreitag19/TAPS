@@ -492,8 +492,8 @@ combine_all_csvs <- function(csv_dir, pattern = "^CSF", output_file = NULL) {
   return(invisible(combined_data))
 }
 
-# Function that creates CSF BED files when possible, NGS files only when needed
-ngs_to_bed <- function(input_file, output_dir = "bed", pairs_taps, ngs_col_name = "Test.Number") {
+# Function that creates CSF BED files when possible, NGS files only when neede
+ngs_to_bed <- function(input_file, output_dir = "bed", pairs_taps) {
   # Load packages
   library(rtracklayer)
   library(GenomicRanges)
@@ -552,18 +552,14 @@ ngs_to_bed <- function(input_file, output_dir = "bed", pairs_taps, ngs_col_name 
   
   # Find NGS ID column
   ngs_col <- NULL
-  if (ngs_col_name %in% names(variants)) {
-    ngs_col <- ngs_col_name
-  } else {
-    for (col in c("Test.Number_datadump", "Test.Number_selected")) {
-      if (col %in% names(variants)) {
-        ngs_col <- col
-        break
-      }
+  for (col in c("Test.Number", "Test.Number_datadump", "Test.Number_selected")) {
+    if (col %in% names(variants)) {
+      ngs_col <- col
+      break
     }
   }
   if (is.null(ngs_col)) stop("No Test.Number column found")
-    
+  
   # 5. Clean variant data
   log("Processing variants...")
   variants$CHROM <- as.character(variants$CHROM)
@@ -603,6 +599,7 @@ ngs_to_bed <- function(input_file, output_dir = "bed", pairs_taps, ngs_col_name 
   
   csf_files_created <- character()
   ngs_files_created <- character()
+  skipped_files <- character() # Track skipped files due to already existing
   
   for (ngs_id in unique_ngs_ids) {
     # Get variants for this NGS ID
@@ -621,38 +618,51 @@ ngs_to_bed <- function(input_file, output_dir = "bed", pairs_taps, ngs_col_name 
       csf_id <- ngs_to_csf[[ngs_id]]
       csf_file <- file.path(output_dir, paste0(csf_id, "_hg38.bed"))
       
-      write.table(
-        bed_data, 
-        file = csf_file, 
-        quote = FALSE, 
-        sep = "\t", 
-        row.names = FALSE, 
-        col.names = FALSE
-      )
-      log(paste("Created", csf_file, "with", nrow(bed_data), "variants (from NGS ID", ngs_id, ")"))
-      csf_files_created <- c(csf_files_created, csf_file)
+      # Check if file already exists - don't overwrite
+      if (file.exists(csf_file)) {
+        log(paste("Skipping", csf_file, "- file already exists"))
+        skipped_files <- c(skipped_files, csf_file)
+      } else {
+        write.table(
+          bed_data, 
+          file = csf_file, 
+          quote = FALSE, 
+          sep = "\t", 
+          row.names = FALSE, 
+          col.names = FALSE
+        )
+        log(paste("Created", csf_file, "with", nrow(bed_data), "variants (from NGS ID", ngs_id, ")"))
+        csf_files_created <- c(csf_files_created, csf_file)
+      }
     } else {
       # No CSF mapping, create NGS version
       ngs_file <- file.path(output_dir, paste0(ngs_id, "_hg38.bed"))
-      write.table(
-        bed_data, 
-        file = ngs_file, 
-        quote = FALSE, 
-        sep = "\t", 
-        row.names = FALSE, 
-        col.names = FALSE
-      )
-      log(paste("Created", ngs_file, "with", nrow(bed_data), "variants (no CSF mapping available)"))
-      ngs_files_created <- c(ngs_files_created, ngs_file)
+      
+      # Check if file already exists - don't overwrite
+      if (file.exists(ngs_file)) {
+        log(paste("Skipping", ngs_file, "- file already exists"))
+        skipped_files <- c(skipped_files, ngs_file)
+      } else {
+        write.table(
+          bed_data, 
+          file = ngs_file, 
+          quote = FALSE, 
+          sep = "\t", 
+          row.names = FALSE, 
+          col.names = FALSE
+        )
+        log(paste("Created", ngs_file, "with", nrow(bed_data), "variants (no CSF mapping available)"))
+        ngs_files_created <- c(ngs_files_created, ngs_file)
+      }
     }
   }
   
-  # 8. Update the pairs_taps table
+  # 8. Update the pairs_taps table (even with existing files)
   if (!"bed" %in% names(pairs_taps)) {
     pairs_taps[, bed := NA_character_]
   }
   
-  # First try to match by CSF ID
+  # First try to match by CSF ID - including both newly created and existing files
   update_count <- 0
   for (i in 1:nrow(pairs_taps)) {
     if (!is.na(pairs_taps$pair[i])) {
@@ -665,7 +675,7 @@ ngs_to_bed <- function(input_file, output_dir = "bed", pairs_taps, ngs_col_name 
     }
   }
   
-  # Then try by NGS ID for any remaining rows
+  # Then try by NGS ID for any remaining rows - including both newly created and existing files
   for (i in 1:nrow(pairs_taps)) {
     if (is.na(pairs_taps$bed[i]) && !is.na(pairs_taps$NGS[i])) {
       ngs_id <- pairs_taps$NGS[i]
@@ -679,8 +689,8 @@ ngs_to_bed <- function(input_file, output_dir = "bed", pairs_taps, ngs_col_name 
   
   log(paste("Updated", update_count, "rows in pairs_taps with bed paths"))
   
-  # 9. Clean up any invalid files (not NGS or CSF format)
-  all_files <- list.files(output_dir, pattern = "_hg38.bed$", full.names = TRUE)
+  # 9. Clean up any invalid files (not NGS or CSF format) - but only ones we just created
+  all_files <- c(csf_files_created, ngs_files_created)  # Only check files we created in this run
   valid_pattern <- paste0("^", output_dir, "/(NGS-[0-9]+-[0-9]+|CSF-[0-9]+-[0-9]+)_hg38.bed$")
   valid_files <- grep(valid_pattern, all_files, value = TRUE)
   invalid_files <- setdiff(all_files, valid_files)
@@ -692,10 +702,12 @@ ngs_to_bed <- function(input_file, output_dir = "bed", pairs_taps, ngs_col_name 
   
   log(paste("Final result:", length(csf_files_created), "CSF BED files and", 
             length(ngs_files_created), "NGS BED files created (no duplication)"))
+  log(paste("Skipped", length(skipped_files), "files that already existed"))
   
   return(list(
     csf_files = csf_files_created,
     ngs_files = ngs_files_created,
+    skipped_files = skipped_files,
     pairs_taps = pairs_taps
   ))
 }
