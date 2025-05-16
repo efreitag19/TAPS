@@ -52,8 +52,7 @@ Update paths in pairs table
    ```
    /gpfs/data/imielinskilab/Git/flows/tasks/SnpEff_taps.task
    ```
-   followed by
-   parsesnpeff & other filtering
+   followed by parsesnpeff & other custom filtering
    
 ## Other downstream analyses
 
