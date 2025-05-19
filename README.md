@@ -45,7 +45,7 @@ Update paths in pairs table
 
 8. **SNV** - following along in `/gpfs/data/imielinskilab/projects/TAPS/wmg-nyu-matija/SNV.ipynb` 
    ```
-   source("~/Projects/TAPS/functions/snv.R") -> ngs_to_bed() to get bed files from PACT data
+   ngs_to_bed() to get bed files from PACT data
    ```
    ```
    /gpfs/home/freite01/lab/Git/flows/tasks/SNV_taps.task
@@ -62,7 +62,7 @@ These, and a few others, are in `/gpfs/data/imielinskilab/projects/TAPS/wmg-nyu-
 
 9. **CNVs**  
    ```R
-   source("~/Projects/TAPS/functions/plots.R") -> plot_gene_cnv()
+   plot_gene_cnv()
    ```
 10. **Fusions**
 
