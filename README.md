@@ -10,6 +10,7 @@ Follow instructions in `/gpfs/data/imielinskilab/projects/TAPS/wmg-nyu-matija/TA
    - `/parabricks`: bams
    - `/coverage`: fragcounter, dryclean
    - `/sv_calling`: gridss
+
 Update paths in pairs table
 
 2. **Dedup bams** (including merging if necessary)
