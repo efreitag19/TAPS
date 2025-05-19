@@ -46,6 +46,7 @@ Update paths in pairs table
    ```
    source("~/Projects/TAPS/functions/snv.R") -> ngs_to_bed() to get bed files from PACT data
    ```
+   ```
    /gpfs/home/freite01/lab/Git/flows/tasks/SNV_taps.task
    ```
    followed by
