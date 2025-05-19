@@ -713,6 +713,7 @@ ngs_to_bed <- function(input_file, output_dir = "bed", pairs_taps) {
 }
 
 ## Filtering snpeff results
+## Filtering snpeff results
 filter_snpeff_results <- function(snv,
                                 min_dp = 15,
                                 max_dp = 150,          
@@ -721,6 +722,7 @@ filter_snpeff_results <- function(snv,
                                 keep_high = TRUE,
                                 keep_high_moderate = TRUE,
                                 keep_upstream_modifiers = TRUE,
+                                keep_all_impacts = FALSE, # Add this new parameter
                                 keep_one_per_variant = TRUE,
                                 remove_duplicates = TRUE,
                                 return_granges = TRUE) {
@@ -784,7 +786,8 @@ filter_snpeff_results <- function(snv,
   }
   
   # Apply impact and annotation filter (general rule approach)
-  if ("impact" %in% colnames(filtered_snv)) {
+  if ("impact" %in% colnames(filtered_snv) && !keep_all_impacts) {
+    # Only apply impact filtering if keep_all_impacts is FALSE
     # Start with an empty result
     impact_filtered <- data.frame()
     
@@ -820,6 +823,8 @@ filter_snpeff_results <- function(snv,
     
     cat(sprintf("Filtered by impact and annotation: %d/%d variants remain\n", 
                 nrow(filtered_snv), original_count))
+  } else if ("impact" %in% colnames(filtered_snv) && keep_all_impacts) {
+    cat("Keeping all impacts as requested, no impact filtering applied\n")
   } else {
     cat("Warning: 'impact' column not found. Skipping impact filter.\n")
   }
