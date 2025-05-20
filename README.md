@@ -66,6 +66,8 @@ These, and a few others, are in `/gpfs/data/imielinskilab/projects/TAPS/wmg-nyu-
    
 10. **Fusions**
 
+   analyze_fusion_junction()
+
 11. **Complex events**  
     ```
     /gpfs/home/freite01/lab/Git/flows/tasks/JaBbA_taps.task
