@@ -63,7 +63,7 @@ These, and a few others, are in `/gpfs/data/imielinskilab/projects/TAPS/wmg-nyu-
 9. **CNVs** - looking at specific amplifications and losses 
 
    plot_gene_cnv()
-   
+
 10. **Fusions** - visualizing read evidence for known fusions 
 
    analyze_fusion_junction()
