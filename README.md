@@ -6,7 +6,7 @@
 
 Follow instructions in `/gpfs/data/imielinskilab/projects/TAPS/wmg-nyu-matija/TAPS_new.ipynb` after receiving link to fastq's, which takes you through the following steps:
 
-1. **Nextflow** - Results give you:
+1. **Nextflow** - results give you:
    - `/parabricks`: bams
    - `/coverage`: fragcounter, dryclean
    - `/sv_calling`: gridss
