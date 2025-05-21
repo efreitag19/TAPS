@@ -16,7 +16,7 @@ Update paths in pairs table
 2. **Dedup bams** (including merging if necessary)
 
 3. **Picard** - get wgs_metrics for number of reads, coverage ->
-      update smb://research-cifs.nyumc.org/Research/snudem01lab/snudem01labspace/$PROJECTS/CSF cfDNA/TAPS LIB PREPS_RESEARCH/ND Summary Data.xlsx
+      update [smb://research-cifs.nyumc.org/Research/snudem01lab/snudem01labspace/$PROJECTS/CSF cfDNA/TAPS LIB PREPS_RESEARCH/ND Summary Data.xlsx]
    ```
    ~/tasks/tumor_only/hg38/PicardBamQC.task
    ```
@@ -33,7 +33,7 @@ Update paths in pairs table
 
 ## Analyses to do per each new batch
 
-6. **ichorCNA** - generate genomeWide.pdfs from bam, and put plots into smb://research-cifs.nyumc.org/Research/snudem01lab/snudem01labspace/$PROJECTS/CSF cfDNA/TAPS_cnv
+6. **ichorCNA** - generate genomeWide.pdfs from bam, and put plots into [smb://research-cifs.nyumc.org/Research/snudem01lab/snudem01labspace/$PROJECTS/CSF cfDNA/TAPS_cnv]
    ```
    /gpfs/data/imielinskilab/git/mskilab/flows/tasks/ichorCNA.task
    ```
@@ -62,11 +62,11 @@ These, and a few others, are in `/gpfs/data/imielinskilab/projects/TAPS/wmg-nyu-
 
 9. **CNVs** - looking at specific amplifications and losses
 
-   plot_gene_cnv()
+   `plot_gene_cnv()`
 
 10. **Fusions** - visualizing read evidence for known fusions
 
-    analyze_fusion_junction()
+    `analyze_fusion_junction()`
    
 11. **Complex events**  
     ```
