@@ -1,3 +1,4 @@
+# Convert annotated snpeff outputs to csv
 convert_all_granges_to_csv <- function(base_dir, dir_pattern = "^CSF-", file_pattern = "annotated_snpeff.rds$") {
   # Define our core conversion function
   convert_single_file <- function(rds_file, output_csv_file) {
@@ -178,6 +179,7 @@ convert_all_granges_to_csv <- function(base_dir, dir_pattern = "^CSF-", file_pat
   return(invisible(results))
 }
 
+# Convert snv vcf outputs to csv
 convert_all_vcfs_to_csv <- function(base_dir, dir_pattern = "^CSF-") {
   # Load required libraries
   library(vcfR)
@@ -429,6 +431,7 @@ convert_all_vcfs_to_csv <- function(base_dir, dir_pattern = "^CSF-") {
   }
 }
 
+# Combine all csf snv csvs
 combine_all_csvs <- function(csv_dir, pattern = "^CSF", output_file = NULL) {
   # Generate default output filename based on pattern if not provided
   if (is.null(output_file)) {
@@ -492,7 +495,7 @@ combine_all_csvs <- function(csv_dir, pattern = "^CSF", output_file = NULL) {
   return(invisible(combined_data))
 }
 
-# Function that creates CSF BED files when possible, NGS files only when neede
+# Function that creates CSF BED files when possible, NGS files only when needed
 ngs_to_bed <- function(input_file, output_dir = "bed", pairs_taps) {
   # Load packages
   library(rtracklayer)
@@ -712,7 +715,6 @@ ngs_to_bed <- function(input_file, output_dir = "bed", pairs_taps) {
   ))
 }
 
-## Filtering snpeff results
 ## Filtering snpeff results
 filter_snpeff_results <- function(snv,
                                 min_dp = 15,
