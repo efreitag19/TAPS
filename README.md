@@ -56,7 +56,7 @@ Update paths in pairs table
    ```
    followed by parsesnpeff & other custom filtering
 
-   running list of all found vs total PACT variants: `/gpfs/data/imielinskilab/projects/TAPS/wmg-nyu-matija/files/Freitag_snv_combined.csv`
+   running list of all found vs total PACT variants: `/gpfs/data/imielinskilab/projects/TAPS/wmg-nyu-matija/files/Freitag_snv_combined_UPDATED-5.21.csv`
    
 ## Other downstream analyses
 
