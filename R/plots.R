@@ -473,21 +473,28 @@ analyze_fusion_junction <- function(bam_path,
       ".png"
     )
   }
-  
-  # Generate visualization based on requested format
+
+  # Modified PNG/PDF options to match your example code
   if(output_format == "svg") {
-    show_svg(
-      plot(
-        c(td.ge.copy, gt_mc, gt_junc),
-        window = GenomicRanges::reduce(jun + 100, ignore.strand = TRUE) + 5000
-      ),
-      height = 20,
-      width = 15
-    )
-    message("SVG visualization created")
-  } else if(output_format == "pdf") {
-    # If filename is provided, use it with pdf extension
-    pdf_file = if(!is.null(filename)) {
+  show_svg(
+    plot(
+      c(td.ge.copy, gt_mc, gt_junc),
+      window = GenomicRanges::reduce(jun + 100, ignore.strand = TRUE) + 5000
+    ),
+    height = 20,
+    width = 15
+  )
+  message("SVG visualization created")
+} else if(output_format == "pdf") {
+  # Changed to use skitools::ppdf instead of pdf()
+  skitools::ppdf(
+    plot(
+      c(td.ge.copy, gt_mc, gt_junc),
+      window = GenomicRanges::reduce(jun + 100, ignore.strand = TRUE) + 5000
+    ),
+    height = 20,
+    width = 15,
+    filename = if(!is.null(filename)) {
       gsub("\\.png$", ".pdf", filename)
     } else {
       base_filename = basename(bam_path)
@@ -499,30 +506,23 @@ analyze_fusion_junction <- function(bam_path,
         ".pdf"
       )
     }
-    
-    pdf(pdf_file, height = 20, width = 15)
+  )
+  message(paste("PDF saved to:", filename))
+} else if(output_format == "png") {
+  # Use png with similar approach to ppdf
+  skitools::ppng(
     plot(
       c(td.ge.copy, gt_mc, gt_junc),
       window = GenomicRanges::reduce(jun + 100, ignore.strand = TRUE) + 5000
-    )
-    dev.off()
-    message(paste("PDF saved to:", pdf_file))
-  } else if(output_format == "png") {
-    # Use ppng as in your example when filename is provided
-    ppng(
-      plot(
-        c(td.ge.copy, gt_mc, gt_junc),
-        window = GenomicRanges::reduce(jun + 100, ignore.strand = TRUE) + 5000
-      ),
-      height = 20,
-      width = 15,
-      filename = filename
-    )
-    message(paste("PNG saved to:", filename))
-  }
-  
-  # Return useful objects
-  return(list(
+    ),
+    height = 20,
+    width = 15,
+    filename = filename
+  )
+  message(paste("PNG saved to:", filename))
+}
+
+return(list(
     junction = jun,
     reads = reads_unlisted,
     mc_windows = mc_windows,
