@@ -38,7 +38,7 @@ Update paths in pairs table
    /gpfs/data/imielinskilab/git/mskilab/flows/tasks/ichorCNA.task
    ```
 
-7. **Classifier**  
+7. **Classifier** - create bed file from rastair that then inputs into methylation classifier, with output being a .csv with predictions and accompanying plots 
    ```
    /gpfs/data/imielinskilab/Git/flows/tasks/Classifier_EF.task
    ```
