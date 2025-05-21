@@ -45,7 +45,7 @@ Update paths in pairs table
 
 8. **SNV** - following along in `/gpfs/data/imielinskilab/projects/TAPS/wmg-nyu-matija/SNV.ipynb` 
    
-   ngs_to_bed() to get bed files from PACT data
+   `ngs_to_bed()` to get bed files from PACT data
    
    ```
    /gpfs/home/freite01/lab/Git/flows/tasks/SNV_taps.task
