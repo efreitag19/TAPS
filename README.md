@@ -60,14 +60,14 @@ Update paths in pairs table
 
 These, and a few others, are in `/gpfs/data/imielinskilab/projects/TAPS/wmg-nyu-matija/EF_downstream_analyses.ipynb`
 
-9. **CNVs**  
+9. **CNVs** - looking at specific amplifications and losses 
 
    plot_gene_cnv()
    
-10. **Fusions**
+10. **Fusions** - visualizing read evidence for known fusions 
 
    analyze_fusion_junction()
-
+   
 11. **Complex events**  
     ```
     /gpfs/home/freite01/lab/Git/flows/tasks/JaBbA_taps.task
