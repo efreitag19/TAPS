@@ -1,3 +1,5 @@
+# These are all works in progress, for the most part ignore !
+
 analyze_fusion_junction <- function(bam_path, 
                                     transcript1 = "ENST00000302326",  # CXXC5
                                     transcript2 = "ENST00000302517",  # MN1
