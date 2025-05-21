@@ -61,7 +61,7 @@ Update paths in pairs table
 These, and a few others, are in `/gpfs/data/imielinskilab/projects/TAPS/wmg-nyu-matija/EF_downstream_analyses.ipynb`
 
 9. **CNVs**  
-   
+
    plot_gene_cnv()
    
 10. **Fusions**
