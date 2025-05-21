@@ -55,6 +55,8 @@ Update paths in pairs table
    /gpfs/data/imielinskilab/Git/flows/tasks/SnpEff_taps.task
    ```
    followed by parsesnpeff & other custom filtering
+
+   running list of all found vs total PACT variants: `/gpfs/data/imielinskilab/projects/TAPS/wmg-nyu-matija/files/Freitag_snv_combined.csv`
    
 ## Other downstream analyses
 
