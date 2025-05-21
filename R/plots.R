@@ -1,17 +1,5 @@
 #!/usr/bin/env Rscript
 
-#' Genomic Data Plot Generation for Copy Number Variation
-#' 
-#' This script analyzes and visualizes genomic copy number variation data, 
-#' particularly focusing on segmentation statistics from RDS files. 
-#' It creates gene plots with customizable parameters.
-#' 
-#' @param seg_file Path to the segmentation RDS file
-#' @param cov_file Path to the coverage RDS file
-#' @param gene_of_interest Gene name to visualize (e.g., "SMARCB1")
-#' @return A PDF plot visualizing the gene CNV data
-
-# Load required libraries
 suppressPackageStartupMessages({
   library(JaBbA)
   library(Flow)
@@ -64,7 +52,7 @@ numeric2color <- function(x, colors, alpha, capvals = TRUE, maxVal = 8, minVal =
   return(outCols)
 }
 
-#' Main function to generate genomic copy number variation plot
+# Main function to generate genomic copy number variation plot
 plot_gene_cnv <- function(
   seg_file,
   cov_file,
@@ -324,52 +312,13 @@ if (sys.nframe() == 0) {
   options(warn = 0)
 }
 
-# Example usage with your specific format:
-# options("jupyter.plot.width" = 20)
-# skitools::ppdf(
-#     {
-#     par(oma = c(0, 0, 0, 0), mai = c(0, 2, 1, 3))
-#     plot(
-#         c(
-#             gt_gc
-#             %>% {x = .; x@data[[1]] = x@data[[1]][GENES]; x}
-#             , 
-#             gt_signal
-#             ,
-#             gt_segs
-#         )
-#         ,
-#         win = (genes %Q% (gene_name %in% GENES) %>% khtools::gr.noval())
-#         + 1e6
-#         ,
-#         legend.params = list(plot = FALSE)
-#         ,
-#         y.quantile = 0.95
-#         , xaxis.suffix = "Mb"
-#         , xaxis.unit = 1e6
-#         , xaxis.round = 1
-#         , xaxis.width = FALSE
-#         , ylab.las = 1
-#         , ylab.adj = 0
-#     ) }
-#     , filename = "TAPS_april/CSF-25-52_SMARCB1.pdf"
-#     , width = 18)
-#
-# Usage with your script:
-# source("~/Projects/TAPS/functions/plots.R")
-# plot_gene_cnv(
-#   "/gpfs/data/imielinskilab/projects/TAPS/wmg-nyu-matija/Flow/CBS_ZC_taps/NGS-23-2549/seg.rds",
-#   "/gpfs/data/imielinskilab/projects/TAPS/wmg-nyu-matija/Flow/CBS_ZC_taps/NGS-23-2549/cov.rds",
-#   c("PLCG2","PKD1L2")
-# )
-
 # To analyze gene fusions
 analyze_fusion_junction <- function(bam_path, 
                                     transcript1 = "ENST00000302326",  # CXXC5
                                     transcript2 = "ENST00000302517",  # MN1
-                                    transcript1_exon = 2,
+                                    transcript1_exon = 2, # exon 2
                                     transcript1_intron = 1,
-                                    transcript2_exon = 1, 
+                                    transcript2_exon = 1, # exon 1
                                     transcript2_intron = 1,
                                     filename = NULL,
                                     output_format = "svg",
