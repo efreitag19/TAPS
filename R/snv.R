@@ -714,3 +714,268 @@ ngs_to_bed <- function(input_file, output_dir = "bed", pairs_taps) {
     pairs_taps = pairs_taps
   ))
 }
+
+## Filtering snpeff results - No dplyr dependency
+filter_snpeff_results <- function(snv,
+                                min_dp = 15,
+                                max_dp = 150,          
+                                min_tlod = 6.0,
+                                min_alt_reads = 5, 
+                                keep_high = TRUE,
+                                keep_high_moderate = TRUE,
+                                keep_upstream_modifiers = TRUE,
+                                keep_all_impacts = FALSE,
+                                keep_one_per_variant = TRUE,
+                                remove_duplicates = TRUE,
+                                return_granges = TRUE) {
+  
+  snv_df <- as.data.frame(snv)
+  cat("Filtering with columns:", paste(head(colnames(snv_df), 10), collapse=", "), "...\n")
+
+  original_count <- nrow(snv_df)
+  filtered_snv <- snv_df
+  
+  # Filter by depth
+  if ("DP" %in% colnames(snv_df)) {
+    depth_filter <- filtered_snv$DP >= min_dp & filtered_snv$DP <= max_dp
+    filtered_snv <- filtered_snv[depth_filter, ]
+    cat(sprintf("Filtered by depth: %d/%d variants remain\n", 
+                nrow(filtered_snv), original_count))
+  } else {
+    cat("Warning: 'DP' column not found. Skipping depth filter.\n")
+  }
+  
+  # Filter by TLOD
+  if ("TLOD" %in% colnames(filtered_snv)) {
+    # Extract numeric values for TLOD
+    if (is.list(filtered_snv$TLOD) || class(filtered_snv$TLOD)[1] == "AsIs") {
+      # For list column or AsIs class
+      tlod_numeric <- sapply(filtered_snv$TLOD, function(x) {
+        if (is.null(x) || length(x) == 0 || all(is.na(x))) return(NA_real_)
+        if (is.numeric(x)) return(x[1])
+        tryCatch(as.numeric(as.character(x)[1]), error = function(e) NA_real_)
+      })
+    } else {
+      # For regular column
+      tlod_numeric <- as.numeric(filtered_snv$TLOD)
+    }
+    
+    tlod_filter <- !is.na(tlod_numeric) & tlod_numeric >= min_tlod
+    filtered_snv <- filtered_snv[tlod_filter, ]
+    
+    cat(sprintf("Filtered by TLOD: %d/%d variants remain\n", 
+                nrow(filtered_snv), original_count))
+  } else {
+    cat("Warning: 'TLOD' column not found. Skipping TLOD filter.\n")
+  }
+  
+  # Filter by alt read count using AD or AS_SB_TABLE
+  if ("AD" %in% colnames(filtered_snv)) {
+    cat("Using AD field for alt read filtering...\n")
+    
+    alt_reads <- sapply(filtered_snv$AD, function(x) {
+      if (is.null(x) || length(x) == 0 || all(is.na(x))) {
+        return(0)
+      }
+      
+      tryCatch({
+        # Handle different formats of AD data
+        if (is.list(x)) {
+          x <- unlist(x)
+        }
+        
+        # Convert to character first, then split by comma if needed
+        x_char <- as.character(x)
+        
+        # If it contains comma, split and take the second value (alt reads)
+        if (grepl(",", x_char)) {
+          ad_values <- as.numeric(strsplit(x_char, ",")[[1]])
+          if (length(ad_values) >= 2) {
+            return(ad_values[2])  # Second value is alt reads
+          }
+        }
+        
+        # If it's already numeric and length > 1, take second element
+        if (is.numeric(x) && length(x) >= 2) {
+          return(x[2])
+        }
+        
+        # Try to convert directly to numeric
+        numeric_val <- as.numeric(x_char)
+        if (!is.na(numeric_val)) {
+          return(numeric_val)
+        }
+        
+        return(0)
+        
+      }, error = function(e) {
+        return(0)
+      })
+    })
+    
+    alt_filter <- alt_reads >= min_alt_reads
+    filtered_snv <- filtered_snv[alt_filter, ]
+    
+    cat(sprintf("Filtered by alt read count (AD): %d/%d variants remain\n", 
+                nrow(filtered_snv), original_count))
+                
+  } else if ("AS_SB_TABLE" %in% colnames(filtered_snv)) {
+    cat("Using AS_SB_TABLE field for alt read filtering...\n")
+    
+    alt_reads <- sapply(filtered_snv$AS_SB_TABLE, function(x) {
+      if (is.null(x) || length(x) == 0 || all(is.na(x))) {
+        return(0)
+      }
+      
+      tryCatch({
+        x_char <- as.character(x)
+        
+        # Handle pipe-separated format: "4,4|2,2"
+        if (grepl("\\|", x_char)) {
+          allele_parts <- strsplit(x_char, "\\|")[[1]]
+          
+          # Take the second part (alt allele) if available
+          if (length(allele_parts) >= 2) {
+            alt_part <- allele_parts[2]
+            alt_counts <- as.numeric(strsplit(alt_part, ",")[[1]])
+            return(sum(alt_counts, na.rm = TRUE))
+          }
+        }
+        
+        # Handle comma-separated format
+        if (grepl(",", x_char)) {
+          counts <- as.numeric(strsplit(x_char, ",")[[1]])
+          if (length(counts) >= 4) {
+            # Assume positions 3 and 4 are alt forward and reverse
+            return(sum(counts[3:4], na.rm = TRUE))
+          } else if (length(counts) >= 2) {
+            return(counts[2])
+          }
+        }
+        
+        # Single number - use as is
+        numeric_val <- as.numeric(x_char)
+        if (!is.na(numeric_val)) {
+          return(numeric_val)
+        }
+        
+        return(0)
+        
+      }, error = function(e) {
+        return(0)
+      })
+    })
+    
+    alt_filter <- alt_reads >= min_alt_reads
+    filtered_snv <- filtered_snv[alt_filter, ]
+    
+    cat(sprintf("Filtered by alt read count (AS_SB_TABLE): %d/%d variants remain\n", 
+                nrow(filtered_snv), original_count))
+  } else {
+    cat("Warning: Neither 'AD' nor 'AS_SB_TABLE' columns found. Skipping alt read count filter.\n")
+  }
+  
+  # Apply impact and annotation filter
+  if ("impact" %in% colnames(filtered_snv) && !keep_all_impacts) {
+    # Create logical vectors for each filter condition
+    keep_variants <- rep(FALSE, nrow(filtered_snv))
+    
+    # Keep HIGH and MODERATE impact variants if requested
+    if (keep_high_moderate) {
+      keep_variants <- keep_variants | (filtered_snv$impact %in% c("HIGH", "MODERATE"))
+    }
+
+    # Keep HIGH impact variants if requested
+    if (keep_high) {
+      keep_variants <- keep_variants | (filtered_snv$impact == "HIGH")
+    }
+    
+    # Keep upstream gene variants with MODIFIER impact if requested
+    if (keep_upstream_modifiers && "annotation" %in% colnames(filtered_snv)) {
+      upstream_condition <- (filtered_snv$impact == "MODIFIER") & 
+                           grepl("upstream_gene_variant", filtered_snv$annotation)
+      keep_variants <- keep_variants | upstream_condition
+    }
+    
+    # Apply the filter
+    filtered_snv <- filtered_snv[keep_variants, ]
+    
+    cat(sprintf("Filtered by impact and annotation: %d/%d variants remain\n", 
+                nrow(filtered_snv), original_count))
+  } else if ("impact" %in% colnames(filtered_snv) && keep_all_impacts) {
+    cat("Keeping all impacts as requested, no impact filtering applied\n")
+  } else {
+    cat("Warning: 'impact' column not found. Skipping impact filter.\n")
+  }
+  
+  # Remove duplicates if requested
+  if (remove_duplicates) {
+    before_dedup <- nrow(filtered_snv)
+    
+    # Create a key for duplicates
+    dup_key <- paste(filtered_snv$seqnames, filtered_snv$start, filtered_snv$end, 
+                     filtered_snv$REF, filtered_snv$ALT, sep="_")
+    
+    # Keep only first occurrence of each unique combination
+    unique_indices <- !duplicated(dup_key)
+    filtered_snv <- filtered_snv[unique_indices, ]
+    
+    cat(sprintf("After removing duplicates: %d/%d variants remain\n", 
+                nrow(filtered_snv), before_dedup))
+  }
+  
+  # Keep one annotation per variant if requested
+  if (keep_one_per_variant && "impact" %in% colnames(filtered_snv) && nrow(filtered_snv) > 0) {
+    # Set impact priority
+    impact_order <- c("HIGH", "MODERATE", "LOW", "MODIFIER")
+    impact_rank <- match(filtered_snv$impact, impact_order)
+    
+    # Create variant key
+    variant_key <- paste(filtered_snv$seqnames, filtered_snv$start, filtered_snv$end, 
+                        filtered_snv$REF, filtered_snv$ALT, sep="_")
+    
+    # Count before grouping
+    before_count <- nrow(filtered_snv)
+    
+    # For each unique variant, keep the one with highest impact
+    unique_variants <- unique(variant_key)
+    keep_indices <- sapply(unique_variants, function(var) {
+      var_indices <- which(variant_key == var)
+      if (length(var_indices) == 1) {
+        return(var_indices)
+      } else {
+        # Return the index with the lowest impact rank (highest priority)
+        best_idx <- var_indices[which.min(impact_rank[var_indices])]
+        return(best_idx)
+      }
+    })
+    
+    filtered_snv <- filtered_snv[keep_indices, ]
+    
+    cat(sprintf("After keeping one annotation per variant: %d/%d variants remain\n", 
+                nrow(filtered_snv), before_count))
+  }
+  
+  # Convert back to GRanges if requested
+  if (return_granges && nrow(filtered_snv) > 0) {
+    # Convert to GRanges object
+    gr <- makeGRangesFromDataFrame(filtered_snv, 
+                                  keep.extra.columns = TRUE, 
+                                  ignore.strand = FALSE,
+                                  seqnames.field = "seqnames",
+                                  start.field = "start",
+                                  end.field = "end")
+    
+    # Make sure to set the genome information for the GRanges object
+    genome(gr) <- genome(snv)
+    
+    return(gr)
+  } else if (return_granges && nrow(filtered_snv) == 0) {
+    # Return empty GRanges with same genome
+    empty_gr <- GRanges()
+    genome(empty_gr) <- genome(snv)
+    return(empty_gr)
+  } else {
+    return(filtered_snv)
+  }
+}
