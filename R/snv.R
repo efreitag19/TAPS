@@ -814,30 +814,9 @@ filter_snpeff_results <- function(snv,
     })
     
     alt_filter <- alt_reads >= min_alt_reads
-
-# --- STRAND BIAS FILTER ---
-strand_filter <- sapply(filtered_snv$AS_SB_TABLE, function(x) {
-  if (is.null(x) || length(x) == 0 || all(is.na(x))) return(FALSE)
-
-  x_char <- as.character(x)
-  if (!grepl("\\|", x_char)) return(TRUE)  # Can't assess strand if not AS_SB_TABLE format
-
-  parts <- strsplit(x_char, "\\|")[[1]]
-  if (length(parts) < 2) return(TRUE)
-
-  ref <- as.numeric(strsplit(parts[1], ",")[[1]])
-  alt <- as.numeric(strsplit(parts[2], ",")[[1]])
-
-  # If either allele is only on one strand, mark as FALSE (strand biased)
-  if (length(ref) < 2 || length(alt) < 2) return(TRUE)  # Fail-safe
-  !( (ref[1] == 0 || ref[2] == 0) && (alt[1] == 0 || alt[2] == 0) )
-})
-
-# Combine filters
-combined_filter <- alt_filter & strand_filter
-filtered_snv <- filtered_snv[combined_filter, ]
-
-cat(sprintf("Filtered by alt count and strand bias: %d/%d variants remain\n", 
+    filtered_snv <- filtered_snv[alt_filter, ]
+   
+    cat(sprintf("Filtered by alt count and strand bias: %d/%d variants remain\n", 
             nrow(filtered_snv), original_count))
                 
   } else if ("AS_SB_TABLE" %in% colnames(filtered_snv)) {
